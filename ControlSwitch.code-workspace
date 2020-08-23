@@ -1,0 +1,11 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "cortex-debug.armToolchainPath": "D:/GNU-MCU-Eclipse/xpack-arm-none-eabi-gcc-9.3.1-1.1/bin",
+        "cortex-debug.openocdPath": "D:/GNU-MCU-Eclipse/xpack-openocd-0.10.0-14/bin/openocd.exe"
+    }
+}
