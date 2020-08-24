@@ -4,7 +4,7 @@
   * @brief          : 0.96寸 oled 控制函数
   ******************************************************************************
   * OLED 使用 I2C 
-  * 连接在 I2C2 上
+  * 连接在 I2C1 上
   ******************************************************************************
   */
 
@@ -12,7 +12,7 @@
 #include "oled_font.h"
 #include "delay.h"
 
-extern I2C_HandleTypeDef hi2c2;
+extern I2C_HandleTypeDef hi2c1;
 
 /* OLED初始化函数 */
 
@@ -21,7 +21,7 @@ extern I2C_HandleTypeDef hi2c2;
  */
 void OLED_Init(void)
 {
-  delay_ms(100);
+  Delay_MS(100);
 
   OLED_WR_Cmd(0xAE); //display off
   OLED_WR_Cmd(0x20); //Set Memory Addressing Mode
@@ -67,7 +67,7 @@ void OLED_Init(void)
  */
 void OLED_WR_Data(uint8_t data)
 {
-  HAL_I2C_Mem_Write(&hi2c2, OLED0561_ADD, OLED_DATA, I2C_MEMADD_SIZE_8BIT, &data, 1, 100);
+  HAL_I2C_Mem_Write(&hi2c1, OLED0561_ADD, OLED_DATA, I2C_MEMADD_SIZE_8BIT, &data, 1, 100);
 }
 /**
  * 向OLED(I2C2)写入一个命令
@@ -75,7 +75,7 @@ void OLED_WR_Data(uint8_t data)
  */
 void OLED_WR_Cmd(uint8_t cmd)
 {
-  HAL_I2C_Mem_Write(&hi2c2, OLED0561_ADD, OLED_CMD, I2C_MEMADD_SIZE_8BIT, &cmd, 1, 100);
+  HAL_I2C_Mem_Write(&hi2c1, OLED0561_ADD, OLED_CMD, I2C_MEMADD_SIZE_8BIT, &cmd, 1, 100);
 }
 
 /* 功能函数 */

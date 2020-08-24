@@ -19,13 +19,13 @@
  * @param  nms 毫秒（量程0-8191ms）
  * @retval None
  */
-void delay_ms(uint16_t nms);
+void Delay_MS(uint16_t nms);
 /**
  * @brief 延时微秒
  * @param  nms 微秒
  * @retval None
  */
-void delay_us(uint32_t us);
+void Delay_US(uint32_t us);
 
 
 #endif

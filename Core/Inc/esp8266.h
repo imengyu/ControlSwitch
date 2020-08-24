@@ -25,6 +25,7 @@ typedef struct
 
 uint8_t ESP8266_Init(void);
 uint8_t ESP8266_Check(void);
+
 /**
  * ESP8266 发送AT指令
  * @param str 指令字符串
@@ -46,5 +47,29 @@ void ESP8266_ATSendString(char*str);
  * @return 连接结果,非0连接成功,0连接失败
  */
 uint8_t ESP8266_ConnectAP(char* ssid, char* pswd);
+/**
+ * 获取当前AP列表
+ * @param buffer 接收缓冲区，约128B
+ */
+void ESP8266_GetAPList(char*buffer);
+/**
+ * 获取当前地址
+ * @param buf 接收缓冲区，约16B
+ */
+void ESP8266_GetCurrentIP(char*buf);
+/**
+ * 设置为AP模式，并开启一个配置服务器
+ */
+uint8_t ESP8266_SetConfigServer();
+/**
+ * 关闭配置服务器
+ */
+uint8_t ESP8266_CloseConfigServer();
+
+void ESP8266_ReceiveHandle();
+
+#define CONFIG_AP_NAME "CSW_Config"  
+#define CONFIG_AP_PASS "12345678"  
+#define CONFIG_SERVER_PORT "8080"  
 
 #endif

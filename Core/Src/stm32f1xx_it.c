@@ -58,7 +58,7 @@
 /* External variables --------------------------------------------------------*/
 extern UART_HandleTypeDef huart1;
 /* USER CODE BEGIN EV */
-extern void UsartReceive_IDLE(UART_HandleTypeDef *huart)
+extern void USART1_Handler(UART_HandleTypeDef *huart);
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -203,11 +203,11 @@ void SysTick_Handler(void)
 void USART1_IRQHandler(void)
 {
   /* USER CODE BEGIN USART1_IRQn 0 */
-  UsartReceive_IDLE(&huart1);
+  USART1_Handler(&huart1);
   /* USER CODE END USART1_IRQn 0 */
   HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
-
+  
   /* USER CODE END USART1_IRQn 1 */
 }
 

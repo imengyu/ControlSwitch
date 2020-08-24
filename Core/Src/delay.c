@@ -10,11 +10,11 @@
 extern TIM_HandleTypeDef htim1;
 
 /**
- * @brief 延时毫秒（定时器1）
- * @param  nms 毫秒（量程0-8191ms）
+ * @brief 延时毫秒
+ * @param  nms 毫秒
  * @retval None
  */
-void delay_ms(uint16_t nms)
+void Delay_MS(uint16_t nms)
 {
   HAL_Delay(nms);
 }
@@ -23,7 +23,7 @@ void delay_ms(uint16_t nms)
  * @param  nms 微秒（量程0-8191ms）
  * @retval None
  */
-void delay_us(uint32_t us)
+void Delay_US(uint32_t us)
 {
   uint32_t delay = (HAL_RCC_GetHCLKFreq() / 4000000 * us);
   while (delay--)

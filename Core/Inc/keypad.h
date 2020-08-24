@@ -40,4 +40,13 @@
 void KEYPAD_Init(void);
 char KEYPAD_Scan(void);
 
+
+
+#define KEY_UP 130
+#define KEY_DOWN 131
+#define KEY_OK 132
+#define KEY_CAN 133
+#define KEY_MOD 134
+#define KEY_MENU 135
+
 #endif
