@@ -255,7 +255,7 @@ void OLED_ShowNum(uint8_t x, uint8_t y, long num, uint8_t len, uint8_t size)
  * @param chr 字符串
  * @param size 选择字体大小，8或16（8x6或16x16）
  */
-void OLED_ShowString(uint8_t x, uint8_t y, uint8_t *chr, uint8_t size)
+void OLED_ShowString(uint8_t x, uint8_t y, char *chr, uint8_t size)
 {
   uint8_t x0 = x, drawEd = 0;
   uint16_t k;

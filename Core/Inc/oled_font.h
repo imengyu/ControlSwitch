@@ -16,7 +16,7 @@ typedef struct FONT_GB162
   unsigned char Msk[32];      
   unsigned char Index[2];    
   unsigned char num;  
-};
+}FONT_GB162;
 
 extern const unsigned char ASCII_F6X8[][6];
 extern const unsigned char ASCII_F8X16[];

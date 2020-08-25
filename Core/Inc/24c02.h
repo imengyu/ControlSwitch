@@ -57,12 +57,11 @@ void AT24C02_WriteOneByte(uint16_t WriteAddr, uint8_t DataToWrite);
  * @retval None
  */
 void AT24C02_WriteOnePage(uint16_t PageAddr, uint16_t WriteAddr, uint8_t *DataToWrite);
-//初始化24C02
-void AT24C02_Init(void); 
+
 /**
  * @brief 擦除24c02所有数据（为0）
  * @retval None
  */
-void AT24C02_FlushAll();
+void AT24C02_FlushAll(void);
 
 #endif

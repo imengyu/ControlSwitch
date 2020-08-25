@@ -20,6 +20,12 @@
 #include "uimode.h"
 
 extern UART_HandleTypeDef huart1; 
+extern UART_HandleTypeDef huart3; 
+
+//*******************************************************************************
+
+extern char UartRxBuf[RX_LEN];
+extern uint8_t UartReceiveFlag;
 
 //*******************************************************************************
 //系统状态变量
@@ -32,8 +38,8 @@ uint8_t currentUIMode = 0;
 //*******************************************************************************
 //系统设置变量
 
-uint8_t wifiName[32];
-uint8_t wifiPassword[32];
+char wifiName[32];
+char wifiPassword[32];
 
 void MAIN_UI_ConnectWifi(void) {
 
@@ -43,12 +49,15 @@ void MAIN_UI_ConnectWifi(void) {
 
   ESP8266_GetCurrentIP(ipBuf);
 
+  printf("CurrentIP : %s\n\r", ipBuf);
+
   OLED_Clear();
-  OLED_ShowString(0, 0, "Use CLW App to Connect WIFI", 8);
-  OLED_ShowString(0, 2, "IP", 8);
-  OLED_ShowString(0, 3, ipBuf, 8);
-  OLED_ShowString(0, 4, "PORT", 8);
-  OLED_ShowString(40, 4, CONFIG_SERVER_PORT, 8);
+  OLED_ShowString(0, 0, "Use CLWApp to", 8);
+  OLED_ShowString(0, 1, "Connect WIFI", 8);
+  OLED_ShowString(0, 3, "IP", 8);
+  OLED_ShowString(0, 4, ipBuf, 8);
+  OLED_ShowString(0, 5, "PORT", 8);
+  OLED_ShowString(40, 5, CONFIG_SERVER_PORT, 8);
 }
 void MAIN_UI_ConnectingWIFI() {
   currentUIMode = UI_MODE_CONNCTING;
@@ -80,6 +89,34 @@ void MAIN_UI_Menu() {
 void MAIN_UI_Def() {
   currentUIMode = UI_MODE_DEF;
 }
+void MAIN_UI_InitFail() {
+  currentUIMode = UI_MODE_BOOT_FAIL;
+  OLED_Clear();
+  OLED_ShowString(0, 0, "!!! ERROR !!!", 8);
+  OLED_ShowString(0, 2, "ESP8266 init failed", 8);
+  OLED_ShowString(0, 6, "Press any key to RESET", 8); 
+}
+
+//*******************************************************************************
+
+void MAIN_UI_AskReboot() {
+  currentUIMode = UI_MODE_ASK_REBOOT;
+
+  OLED_Clear();
+  OLED_ShowString(0, 0, "Do you want REBOOT?", 8);
+
+  OLED_ShowString(0, 2, "OK  > Reboot", 8);
+  OLED_ShowString(0, 3, "CAN > Back", 8);
+}
+void MAIN_UI_AskResetSettings() {
+  currentUIMode = UI_MODE_ASK_RESETSET;
+
+  OLED_Clear();
+  OLED_ShowString(0, 0, "Do you want to Reset all settings?", 8);
+
+  OLED_ShowString(0, 3, "OK  > Yes", 8);
+  OLED_ShowString(0, 4, "CAN > Back", 8);
+}
 
 //*******************************************************************************
 
@@ -90,8 +127,8 @@ void MAIN_ReadSettings() {
   memset(wifiName, 0, sizeof(wifiName));
   memset(wifiPassword, 0, sizeof(wifiName));
 
-  AT24C02_Read(ADDR_WIFI_NAME, 32, &wifiName);
-  AT24C02_Read(ADDR_WIFI_PASS, 32, &wifiPassword);
+  AT24C02_Read(ADDR_WIFI_NAME, 32, (uint8_t*)&wifiName);
+  AT24C02_Read(ADDR_WIFI_PASS, 32, (uint8_t*)&wifiPassword);
 }
 //设置还原
 void MAIN_ResetSettings() {
@@ -99,6 +136,17 @@ void MAIN_ResetSettings() {
   memset(wifiPassword, 0, sizeof(wifiName));
 
   AT24C02_FlushAll();
+}
+//连接阿里物联网服务器
+void MAIN_ConnectServer() {
+  printf("MAIN_ConnectServer");
+  OLED_Clear();
+  OLED_ShowString(0, 0, "OK!", 8);
+  OLED_ShowString(0, 1, "> MAIN_ConnectServer", 8);
+}
+//开始工作
+void MAIN_StartWorker() {
+
 }
 //连接WIFI
 void MAIN_DoConnectWIFI() {
@@ -119,15 +167,6 @@ void MAIN_Reboot() {
   NVIC_SystemReset();//复位函数
 }
 
-//连接阿里物联网服务器
-void MAIN_ConnectServer() {
-
-}
-//开始工作
-void MAIN_StartWorker() {
-
-}
-
 //*******************************************************************************
 
 //按键处理
@@ -143,6 +182,8 @@ void MAIN_Handler_KeyCode(char keyChar) {
     switch (currentUIMode)
     {
     case UI_MODE_MENU: MAIN_UI_Def(); break;
+    case UI_MODE_ASK_REBOOT: MAIN_UI_Menu(); break;
+    case UI_MODE_ASK_RESETSET: MAIN_UI_Menu(); break;
     case UI_MODE_CONNCT_ERR: MAIN_ToConfigMode(); break;
     }
     break;
@@ -152,20 +193,22 @@ void MAIN_Handler_KeyCode(char keyChar) {
     {
     case UI_MODE_CONNCT_ERR: MAIN_DoConnectWIFI(); break;
     case UI_MODE_MENU: MAIN_UI_Def(); break;
+    case UI_MODE_ASK_REBOOT: MAIN_Reboot(); break;
+    case UI_MODE_ASK_RESETSET: MAIN_ResetSettings(); break;
     }
     break;
   }
   case '1': {
     switch (currentUIMode)
     {
-    case UI_MODE_MENU: MAIN_Reboot(); break;
+    case UI_MODE_MENU: MAIN_UI_AskReboot(); break;
     }
     break;
   } 
   case '2': {
     switch (currentUIMode)
     {
-    case UI_MODE_MENU: MAIN_ResetSettings(); break;
+    case UI_MODE_MENU: MAIN_UI_AskResetSettings(); break;
     }
     break;
   }
@@ -181,7 +224,7 @@ void MAIN_Handler_KeyCode(char keyChar) {
 //按键处理
 void MAIN_Handler_Key(uint8_t key) {
 
-  uchar num[3];
+  char num[3];
   sprintf(num, "%d", downKey);
   OLED_ShowString(111, 7, num, 8);
 
@@ -210,7 +253,6 @@ void MAIN_Handler_Key(uint8_t key) {
 void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
 
   uint16_t pos, end;
-  char buffer[16];
 
   switch (buf[0])
   {
@@ -224,11 +266,11 @@ void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
 
     if(strncmp(buf+1, "PASS", end - 1) == 0){
       strncpy(wifiPassword, buf + end, len - end);
-      AT24C02_WriteOnePage(1, 0, wifiPassword);//写入24C02
+      AT24C02_WriteOnePage(1, 0, (uint8_t*)wifiPassword);//写入24C02
     }
     else if(strncmp(buf+1, "WIFI", end - 1) == 0) {
       strncpy(wifiName, buf + end, len - end);
-      AT24C02_WriteOnePage(0, 0, wifiName);//写入24C02
+      AT24C02_WriteOnePage(0, 0, (uint8_t*)wifiName);//写入24C02
     }
     else if(strncmp(buf+1, "COONECT", end - 1) == 0)
       MAIN_DoConnectWIFI();//连接指令
@@ -244,24 +286,24 @@ void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
  * 程序初始化
  */
 void MAIN_Init(void)
-{ 
+{
+  printf("Hello CSW!");
+
   //初始化外设
   LED_init();
   OLED_Init();
-  OLED_Draw12864BMP(INTRO_BMP);
-  AT24C02_Init();
+  OLED_Draw12864BMP((uint8_t*)INTRO_BMP);
   KEYPAD_Init();
 
   //初始化 ESP8266
-  if (!ESP8266_Init())
+  if (ESP8266_Init() == 0)
   {
-    currentUIMode = UI_MODE_BOOT_FAIL;
-    OLED_Clear();
-    OLED_ShowString(0, 0, "!!! ERROR !!!", 16);
-    OLED_ShowString(0, 2, "ESP8266 init failed", 8);
-    OLED_ShowString(0, 4, "Press any key to RESET", 8);
+    printf("ESP8266_Init Failed !");
+    MAIN_UI_InitFail();
     return;
   }
+
+  printf("ESP8266_Init ok");
 
   //读取设置
   MAIN_ReadSettings();
@@ -280,21 +322,20 @@ void MAIN_Init(void)
  */
 void MAIN_Loop(void)
 {
+  //扫描键盘
   uint8_t key = KEYPAD_Scan();
   if(key != downKey) {
     downKey = key;
     if (0 < downKey && downKey < 17)
       MAIN_Handler_Key(downKey);
   }
-}
 
-
-/**
- * UART 回调
- */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-	UNUSED(huart);
-	if(huart == &huart1) 
+  //ESP8266 UART接收
+  if(USART1_GetReceiveFlag()) {
+    Delay_MS(100);
     ESP8266_ReceiveHandle();
+  }
+
+  Delay_MS(50);
 }
+

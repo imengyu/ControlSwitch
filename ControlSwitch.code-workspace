@@ -6,6 +6,9 @@
     ],
     "settings": {
         "cortex-debug.armToolchainPath": "E:/GNU-MCU-Eclipse/xpack-arm-none-eabi-gcc-9.3.1-1.1/bin",
-        "cortex-debug.openocdPath": "E:/GNU-MCU-Eclipse/xpack-openocd-0.10.0-14/bin/openocd.exe"
+        "cortex-debug.openocdPath": "E:/GNU-MCU-Eclipse/xpack-openocd-0.10.0-14/bin/openocd.exe",
+        "files.associations": {
+          "sstream": "c"
+        }
     }
 }

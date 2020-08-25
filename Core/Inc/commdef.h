@@ -21,3 +21,4 @@
 #define GPIO_Remap_SWJ_JTAGDisable  ((uint32_t)0x00300200)  /*!< JTAG-DP Disabled and SW-DP Enabled */
 
 #endif
+

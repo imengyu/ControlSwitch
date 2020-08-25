@@ -9,6 +9,7 @@
   */
 
 #include "24c02.h"
+#include "string.h"
 
 extern I2C_HandleTypeDef hi2c1;
 
@@ -41,7 +42,7 @@ void AT24C02_Read(uint16_t ReadAddr, uint8_t readSize, uint8_t* readBuffer) {
  * @retval None
  */
 void AT24C02_WriteOneByte(uint16_t WriteAddr, uint8_t DataToWrite) {
-  HAL_I2C_Mem_Write(&hi2c1, ADDR_AT24C02_Write, WriteAddr, I2C_MEMADD_SIZE_8BIT, DataToWrite, 1, 1000);
+  HAL_I2C_Mem_Write(&hi2c1, ADDR_AT24C02_Write, WriteAddr, I2C_MEMADD_SIZE_8BIT, &DataToWrite, 1, 1000);
   HAL_Delay(5);
 }
 /**
@@ -68,3 +69,4 @@ void AT24C02_FlushAll() {
   for(n = 0; n < 8; n++)
     AT24C02_WriteOnePage(n, 0, buf);
 }
+
