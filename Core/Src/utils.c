@@ -1,4 +1,17 @@
 #include "utils.h"
 #include "stdio.h"
 
-extern UART_HandleTypeDef huart3;
+unsigned char DecToBCD(unsigned char mData)
+{
+  unsigned char BCD = 0;
+
+  while (mData >= 10)
+  {
+    mData -= 10;
+    BCD++;
+  }
+  BCD <<= 4;
+  BCD |= mData;
+  return BCD;
+}
+

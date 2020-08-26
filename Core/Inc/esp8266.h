@@ -100,14 +100,36 @@ void ESP8266_GetAPList(char*buffer);
 void ESP8266_GetCurrentIP(char*buf);
 /**
  * 设置为AP模式，并开启一个配置服务器
+ * @return 返回1成功，返回0不成功
  */
 uint8_t ESP8266_SetConfigServer(void);
 /**
  * 关闭配置服务器
+ * @return 返回1成功，返回0不成功
  */
 uint8_t ESP8266_CloseConfigServer(void);
+/**
+ * 打开TCP连接
+ * @param ip 目标IP
+ * @param port 目标端口
+ * @return 返回1成功，返回0不成功
+ */
+uint8_t ESP8266_StartTcp(char*ip, uint8_t port);
+/**
+ * ESP8266发送数据
+ * @param data 数据
+ * @param len 数据长度
+ * @return 返回1成功，返回0不成功
+ */
+uint8_t ESP8266_SendData(char*data, uint16_t len);
 
+/**
+ * 获取的一个连接的设备IP地址
+ * @param buf 接收缓冲区，约16B
+ */
+void ESP8266_GetFirstConnectIP(char*buf);
 
+//ESP8266接收处理
 void ESP8266_ReceiveHandle(void);
 
 #define CONFIG_AP_NAME "CSW_Config"  

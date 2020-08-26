@@ -59,6 +59,9 @@ void OLED_Init(void)
 
   OLED_Clear();
   OLED_Set_Pos(0, 0);
+
+  //绘制进入界面
+  OLED_Draw12864BMP((uint8_t*)INTRO_BMP);
 }
 
 /**

@@ -18,22 +18,38 @@
 #include "stdio.h"
 #include "string.h"
 #include "uimode.h"
+#include "ds1302.h"
+#include "dht11.h"
 
 extern UART_HandleTypeDef huart1; 
 extern UART_HandleTypeDef huart3; 
+
+extern TIM_HandleTypeDef htim2;
 
 //*******************************************************************************
 
 extern char UartRxBuf[RX_LEN];
 extern uint8_t UartReceiveFlag;
 
+extern Timedata ReadTime;
+
 //*******************************************************************************
 //系统状态变量
 
 uint8_t downKey = 0;
 uint8_t keyMode = 0;
+uint8_t tim1sActived = 0;
+uint16_t loopTick = 0;
+uint16_t lastKeyTick = 0;
+uint8_t serverConnected = 0;
+uint8_t isInLowMode = 0;
 
 uint8_t currentUIMode = 0;
+uint8_t oldUIMode = 0;
+uint8_t currentUICanUseMenu = 1;
+
+float humidness;
+float temperature;
 
 //*******************************************************************************
 //系统设置变量
@@ -41,11 +57,19 @@ uint8_t currentUIMode = 0;
 char wifiName[32];
 char wifiPassword[32];
 
+void MAIN_UI_GoUIMode(uint8_t mode) {
+  switch(mode) {
+    case UI_MODE_DEF: MAIN_UI_Def(); break;
+    case UI_MODE_CONNCTING: MAIN_UI_ConnectingWIFI(); break;
+    case UI_MODE_CONNCT_TIP: MAIN_UI_ConnectWifi(); break;
+  }
+}
 void MAIN_UI_ConnectWifi(void) {
 
   char ipBuf[16];
 
   currentUIMode = UI_MODE_CONNCT_TIP;
+  currentUICanUseMenu = 1;
 
   ESP8266_GetCurrentIP(ipBuf);
 
@@ -61,6 +85,7 @@ void MAIN_UI_ConnectWifi(void) {
 }
 void MAIN_UI_ConnectingWIFI() {
   currentUIMode = UI_MODE_CONNCTING;
+  currentUICanUseMenu = 0;
 
   OLED_Clear();
   OLED_ShowString(0, 0, "Connecting", 8);
@@ -68,6 +93,7 @@ void MAIN_UI_ConnectingWIFI() {
 }
 void MAIN_UI_ConnectWifiFailed(void) {
   currentUIMode = UI_MODE_CONNCT_ERR;
+  currentUICanUseMenu = 0;
 
   OLED_Clear();
   OLED_ShowString(0, 0, "Connect WIFI Failed", 8);
@@ -75,8 +101,11 @@ void MAIN_UI_ConnectWifiFailed(void) {
   OLED_ShowString(0, 3, "OK -> Retry", 8);
   OLED_ShowString(0, 4, "CAN -> Config", 8);
 }
-void MAIN_UI_Menu() {
+void MAIN_UI_Menu(uint8_t restoreOldMode) {
+  if(restoreOldMode)
+    oldUIMode = currentUIMode;
   currentUIMode = UI_MODE_MENU;
+  currentUICanUseMenu = 0;
 
   OLED_Clear();
   OLED_ShowString(0, 0, "CSW Menu", 8);
@@ -88,13 +117,30 @@ void MAIN_UI_Menu() {
 }
 void MAIN_UI_Def() {
   currentUIMode = UI_MODE_DEF;
+  currentUICanUseMenu = 1;
+  OLED_Clear();
 }
 void MAIN_UI_InitFail() {
   currentUIMode = UI_MODE_BOOT_FAIL;
+  currentUICanUseMenu = 0;
   OLED_Clear();
   OLED_ShowString(0, 0, "!!! ERROR !!!", 8);
   OLED_ShowString(0, 2, "ESP8266 init failed", 8);
   OLED_ShowString(0, 6, "Press any key to RESET", 8); 
+}
+void MAIN_UI_WriteTime() {
+  char buf[11];
+  sprintf(buf, "%04d/%02d/%02d", ReadTime.year, ReadTime.month, ReadTime.day);
+  OLED_ShowString(0, 6, buf, 8); 
+  sprintf(buf, "%02d:%02d:%02d", ReadTime.hour, ReadTime.minute, ReadTime.second);
+  OLED_ShowString(0, 7, buf, 8); 
+}
+void MAIN_UI_WriteData() {
+  char buf[11];
+  sprintf(buf, "%4.2f°C", temperature);
+  OLED_ShowString(0, 4, buf, 8); 
+  sprintf(buf, "%4.2f%%RH", humidness);
+  OLED_ShowString(0, 5, buf, 8); 
 }
 
 //*******************************************************************************
@@ -122,6 +168,19 @@ void MAIN_UI_AskResetSettings() {
 
 //*******************************************************************************
 
+void MAIN_SwitchLowMode(uint8_t mode) {
+  if(isInLowMode != mode) {
+    isInLowMode = mode;
+    if(isInLowMode) {
+      isInLowMode = 0;
+      OLED_Display_On();
+    } else {
+      isInLowMode = 1;
+      OLED_Display_Off();
+    }
+  }
+  
+}
 //读取设置
 void MAIN_ReadSettings() {
   memset(wifiName, 0, sizeof(wifiName));
@@ -150,6 +209,7 @@ void MAIN_StartWorker() {
 }
 //连接WIFI
 void MAIN_DoConnectWIFI() {
+  serverConnected = 0;
   MAIN_UI_ConnectingWIFI();
   if(ESP8266_ConnectAP(wifiName, wifiPassword) == 0) {
     MAIN_ConnectServer();
@@ -158,6 +218,7 @@ void MAIN_DoConnectWIFI() {
 }
 //转为配置模式
 void MAIN_ToConfigMode() {
+  serverConnected = 0;
   ESP8266_SetConfigServer();
   MAIN_UI_ConnectWifi();
 }
@@ -165,6 +226,27 @@ void MAIN_ToConfigMode() {
 void MAIN_Reboot() {
   __set_FAULTMASK(1);//关闭所有中断
   NVIC_SystemReset();//复位函数
+}
+
+//*******************************************************************************
+
+//读取DHT11数据
+void MAIN_ReadDHT11() {
+  uint8_t buffer[5];
+  if (DHT11_Read_Data(buffer) == 0)
+  {
+    humidness = buffer[0] + buffer[1] / 10.0f;
+    temperature = buffer[2] + buffer[3] / 10.0f;
+  }
+
+  if(isInLowMode == 0 && currentUIMode == UI_MODE_DEF) 
+    MAIN_UI_WriteData();
+}
+//刷新DS1302时间数据
+void MAIN_RefeshDS1302() {
+  DS1302_Read_Time();
+  if(isInLowMode == 0 && currentUIMode == UI_MODE_DEF) 
+    MAIN_UI_WriteTime();
 }
 
 //*******************************************************************************
@@ -177,13 +259,13 @@ void MAIN_Handler_KeyCode(char keyChar) {
   }
   switch (keyChar)
   {
-  case KEY_MENU: MAIN_UI_Menu(); break;
+  case KEY_MENU: if(currentUICanUseMenu) MAIN_UI_Menu(1); break;
   case KEY_CAN: {
     switch (currentUIMode)
     {
-    case UI_MODE_MENU: MAIN_UI_Def(); break;
-    case UI_MODE_ASK_REBOOT: MAIN_UI_Menu(); break;
-    case UI_MODE_ASK_RESETSET: MAIN_UI_Menu(); break;
+    case UI_MODE_MENU: MAIN_UI_GoUIMode(oldUIMode); break;
+    case UI_MODE_ASK_REBOOT: MAIN_UI_Menu(0); break;
+    case UI_MODE_ASK_RESETSET: MAIN_UI_Menu(0); break;
     case UI_MODE_CONNCT_ERR: MAIN_ToConfigMode(); break;
     }
     break;
@@ -253,17 +335,19 @@ void MAIN_Handler_Key(uint8_t key) {
 void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
 
   uint16_t pos, end;
+  char ip[17];
+
+  end = len;
+  for(pos = 1; pos < len; pos++)
+    if(buf[pos] == ':' || pos == len - 1) {
+      end = pos;
+      break;
+    }
 
   switch (buf[0])
   {
-  case 'C': {//控制和配置指令
-    end = len;
-    for(pos = 1; pos < len; pos++)
-      if(buf[pos] == ':' || pos == len - 1) {
-        end = pos;
-        break;
-      }
-
+  case 'C': {//配置指令
+  
     if(strncmp(buf+1, "PASS", end - 1) == 0){
       strncpy(wifiPassword, buf + end, len - end);
       AT24C02_WriteOnePage(1, 0, (uint8_t*)wifiPassword);//写入24C02
@@ -272,12 +356,28 @@ void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
       strncpy(wifiName, buf + end, len - end);
       AT24C02_WriteOnePage(0, 0, (uint8_t*)wifiName);//写入24C02
     }
-    else if(strncmp(buf+1, "COONECT", end - 1) == 0)
-      MAIN_DoConnectWIFI();//连接指令
 
     break;
   }
+  case 'M': {//控制指令
+
+    ESP8266_GetFirstConnectIP(ip);
+
+    if(strncmp(buf+1, "COONECT", end - 1) == 0) {
+  
+      if(ESP8266_StartTcp(ip, 5000) == 1)
+        ESP8266_SendData("OK", 3);
+
+      MAIN_DoConnectWIFI();//开始连接
+    }
+    if(strncmp(buf+1, "TEST", end - 1) == 0) {
+      if(ESP8266_StartTcp(ip, 5000) == 1)
+        ESP8266_SendData("OK", 3);
+    }
+    break;
   }
+  }
+
 }
 
 //*******************************************************************************
@@ -287,13 +387,16 @@ void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
  */
 void MAIN_Init(void)
 {
-  printf("Hello CSW!");
+  printf("CSW Boot");
 
   //初始化外设
   LED_init();
   OLED_Init();
-  OLED_Draw12864BMP((uint8_t*)INTRO_BMP);
+  DS1302_Init();
   KEYPAD_Init();
+  DHT11_Reset();
+  
+  HAL_TIM_Base_Start_IT(&htim2); //启动定时器
 
   //初始化 ESP8266
   if (ESP8266_Init() == 0)
@@ -326,8 +429,38 @@ void MAIN_Loop(void)
   uint8_t key = KEYPAD_Scan();
   if(key != downKey) {
     downKey = key;
-    if (0 < downKey && downKey < 17)
+    if (0 < downKey && downKey < 17) {
+      lastKeyTick = 0;
+      MAIN_SwitchLowMode(0);
       MAIN_Handler_Key(downKey);
+    }
+  }
+
+  //1S处理函数
+  if(tim1sActived == 1) {
+
+    //计数器
+    if(loopTick < 0xfffe) loopTick++;
+    else loopTick == 0;
+
+    //每一分钟采集一次数据
+    if(loopTick % 60 == 0) {
+      MAIN_ReadDHT11();
+      
+    }
+
+    //每秒读取DS1302
+    MAIN_RefeshDS1302();
+
+    //键盘长时间无响应时间
+    if(lastKeyTick < 0xfffe) lastKeyTick++;
+    else lastKeyTick = 0x0fff;
+
+    //如果100s无响应，则关闭显示器
+    if(lastKeyTick == 100)
+      MAIN_SwitchLowMode(1);
+
+    tim1sActived = 0;
   }
 
   //ESP8266 UART接收
@@ -336,6 +469,15 @@ void MAIN_Loop(void)
     ESP8266_ReceiveHandle();
   }
 
-  Delay_MS(50);
+  Delay_MS(40);
+}
+
+//*******************************************************************************
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if(htim->Instance == TIM2) {
+    tim1sActived = 1;
+  }
 }
 

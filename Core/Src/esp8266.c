@@ -352,6 +352,42 @@ void ESP8266_GetCurrentIP(char*buf) {
   }
 }
 
+/**
+ * 获取的一个连接的设备IP地址
+ * @param buf 接收缓冲区，约16B
+ */
+void ESP8266_GetFirstConnectIP(char*buf) {
+  char* str,* pos, *cut_start, *cut_end;
+  uint16_t cur;
+
+  USART1_ClearRX();
+  ESP8266_ATSendString("AT+CWLIF\r\n");
+  Delay_MS(200);
+
+  // ESP8266 返回格式：
+  /*
+AT+CWLIF
+192.168.4.2,a4:50:46:34:a9:95
+
+OK
+
+  */
+  //解析字符串中的 APIP ，获取ip ，并以保存至字符串缓冲区
+  cur = 0;
+  str = (char*)UartRxBuf;
+  pos = (char*)strstr(str, "CWLIF");
+  if (pos != 0) {
+      cut_end = cut_start = (pos + 8);
+      while (*cut_end != ',' && cut_end - cut_start < 26) cut_end++;
+      for (; cut_start < cut_end; cut_start++) {
+          buf[cur] = *cut_start;
+          cur++;
+      }
+      buf[cur] = '\0';
+  }
+}
+
+
 //**********************************************************
 
 /**
@@ -456,7 +492,54 @@ uint8_t ESP8266_OpenTransmission(void)
 }
 
 
-//**********************************************************
+//*********************************************************
+
+/**
+ * 打开TCP连接
+ * @param ip 目标IP
+ * @param port 目标端口
+ * @return 返回1成功，返回0不成功
+ */
+uint8_t ESP8266_StartTcp(char*ip, uint8_t port) {
+  USART1_ClearTX();
+	sprintf((char*)UartTxBuf, "AT+CIPSTART=0,\"TCP\",\"%s\",%d\r\n", ip, port);
+  USART1_ClearRX();
+	ESP8266_ATSendString((char*)UartTxBuf);
+  Delay_MS(100);
+	if(FindStr((char*)UartRxBuf,"OK",200) == 0)
+    return 0;
+
+  return 1;
+}
+/**
+ * ESP8266发送数据
+ * @param data 数据
+ * @param len 数据长度
+ * @return 返回1成功，返回0不成功
+ */
+uint8_t ESP8266_SendData(char*data, uint16_t len) {
+  USART1_ClearTX();
+  USART1_ClearRX();
+	sprintf((char*)UartTxBuf, "AT+CIPSEND=0,%s\r\n", len);
+
+	ESP8266_ATSendString((char*)UartTxBuf);
+  Delay_MS(100);
+	if(FindStr((char*)UartRxBuf,">",200) == 0)
+    return 0;
+
+  USART1_ClearTX();
+  USART1_ClearRX();
+  sprintf((char*)UartTxBuf, "%s\r\n", data);
+
+	ESP8266_ATSendString((char*)UartTxBuf);
+  Delay_MS(200);
+	if(FindStr((char*)UartRxBuf,"SEND OK",200) == 0)
+    return 0;
+
+  return 1;
+}
+
+
 
 extern void MAIN_Handler_WifiCommand(char*buf, uint16_t len);
 
