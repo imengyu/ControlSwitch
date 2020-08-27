@@ -3,26 +3,27 @@
 
 void DHT11_GPIO_Input(void)
 {
-    GPIO_InitTypeDef GPIO_InitStruct;
-    
-    GPIO_InitStruct.Pin = DHT11_GPIO_PIN;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT; //浮空输入
-    
-    HAL_GPIO_Init(DHT11_GPIO_PORT, &GPIO_InitStruct);
+  GPIO_InitTypeDef GPIO_InitStruct;
+  
+  GPIO_InitStruct.Pin = DHT11_GPIO_PIN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT; //浮空输入
+  
+  HAL_GPIO_Init(DHT11_GPIO_PORT, &GPIO_InitStruct);
 }
-
-void DHT11_GPIO_Onput(void)
+void DHT11_GPIO_Output(void)
 {
-    GPIO_InitTypeDef GPIO_InitStruct;
-    
-    GPIO_InitStruct.Pin = DHT11_GPIO_PIN;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; //推挽输出
+  GPIO_InitTypeDef GPIO_InitStruct;
+  
+  GPIO_InitStruct.Pin = DHT11_GPIO_PIN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; //推挽输出
 
-    HAL_GPIO_Init(DHT11_GPIO_PORT, &GPIO_InitStruct);
+  HAL_GPIO_Init(DHT11_GPIO_PORT, &GPIO_InitStruct);
 }
-
+void DHT11_Init(void)
+{
+}
 void DHT11_Reset(void)
 {
   // 按照DHT11手册步骤
@@ -70,7 +71,7 @@ uint16_t DHT11_Read_Data(uint8_t *buffer)
 {
     uint16_t i = 0;
     
-    DHT11_reset();
+    DHT11_Reset();
     if (DHT11_Scan() == RESET)
     {
         //检测到DHT11响应
@@ -95,3 +96,4 @@ uint16_t DHT11_Read_Data(uint8_t *buffer)
     
     return 0;
 }
+

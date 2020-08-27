@@ -15,8 +15,6 @@
 #include "stdlib.h"
 #include "string.h"
 
-//是否开启输出esp8266的串口数据到printf
-#define ENABLE_UART_OUTPUT 1 
 
 extern UART_HandleTypeDef huart1; 
 extern DMA_HandleTypeDef hdma_usart1_rx;
@@ -52,9 +50,6 @@ void USART1_Handler(UART_HandleTypeDef *huart)
       UartReceiveFlag = 1; //接受完成标志位置1  
       UartRxBuf[UartReceiveLength] = '\0';//末尾加0
 
-#if ENABLE_UART_OUTPUT
-      printf("ESP8266 > %s\n", UartRxBuf);
-#endif
       HAL_UART_Receive_DMA(&huart1, (uint8_t*)UartRxBuf, RX_LEN);//重新打开DMA接收  
     }
   }
@@ -178,16 +173,14 @@ void ESP8266_ATSendBuf(uint8_t *str, uint16_t len) {
  */
 uint8_t ESP8266_ConnectAP(char* ssid, char* pswd)
 {
-	uint8_t cnt=5;
+	uint8_t cnt = 5;
 	while(cnt--)
 	{
 		USART1_ClearRX();
 		ESP8266_ATSendString("AT+CWMODE=1\r\n"); //设置为STATION模式	
     Delay_MS(120);
 		if(FindStr((char*)UartRxBuf,"OK",200) != 0)
-		{
-			break;
-		}             		
+			break;          		
 	}
 	if(cnt == 0)
 		return 0;
@@ -200,10 +193,9 @@ uint8_t ESP8266_ConnectAP(char* ssid, char* pswd)
 		sprintf((char*)UartTxBuf,"AT+CWJAP=\"%s\",\"%s\"\r\n",ssid,pswd);//连接目标AP
 		ESP8266_ATSendString((char*)UartTxBuf);	
     Delay_MS(120);
-		if(FindStr((char*)UartRxBuf,"OK",8000)!=0) //连接成功且分配到IP
-		{
+		if(FindStr((char*)UartRxBuf,"OK", 8000) != 0) //连接成功且分配到IP
 			return 1;
-		}
+
 	}
 	return 0;
 }
@@ -444,7 +436,7 @@ uint8_t ESP8266_SetConfigServer() {
 
 	if(cnt == 0) return 0;
 
-  printf("ConfigServer seted ! AP : %s PASS %s", CONFIG_AP_NAME, CONFIG_AP_PASS);
+  printf("CSW > ConfigServer seted ! AP : %s PASS %s\n", CONFIG_AP_NAME, CONFIG_AP_PASS);
   
   return 1;
 }
@@ -500,7 +492,7 @@ uint8_t ESP8266_OpenTransmission(void)
  * @param port 目标端口
  * @return 返回1成功，返回0不成功
  */
-uint8_t ESP8266_StartTcp(char*ip, uint8_t port) {
+uint8_t ESP8266_StartTcp(char*ip, uint16_t port) {
   USART1_ClearTX();
 	sprintf((char*)UartTxBuf, "AT+CIPSTART=0,\"TCP\",\"%s\",%d\r\n", ip, port);
   USART1_ClearRX();
@@ -520,7 +512,7 @@ uint8_t ESP8266_StartTcp(char*ip, uint8_t port) {
 uint8_t ESP8266_SendData(char*data, uint16_t len) {
   USART1_ClearTX();
   USART1_ClearRX();
-	sprintf((char*)UartTxBuf, "AT+CIPSEND=0,%s\r\n", len);
+	sprintf((char*)UartTxBuf, "AT+CIPSEND=0,%d\r\n", len);
 
 	ESP8266_ATSendString((char*)UartTxBuf);
   Delay_MS(100);
@@ -529,7 +521,7 @@ uint8_t ESP8266_SendData(char*data, uint16_t len) {
 
   USART1_ClearTX();
   USART1_ClearRX();
-  sprintf((char*)UartTxBuf, "%s\r\n", data);
+  sprintf((char*)UartTxBuf, "%s\n", data);
 
 	ESP8266_ATSendString((char*)UartTxBuf);
   Delay_MS(200);
@@ -549,6 +541,8 @@ extern void MAIN_Handler_WifiCommand(char*buf, uint16_t len);
  * （单条命令长度最大为64）
  */
 void ESP8266_ReceiveHandle() {
+  UartReceiveFlag = 0;
+
   uint16_t pos, cut_start, cut_end, cur, len, dataLen;
   char buf[64];
   char* str;

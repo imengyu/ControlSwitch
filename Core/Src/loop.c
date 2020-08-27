@@ -30,6 +30,7 @@ extern TIM_HandleTypeDef htim2;
 
 extern char UartRxBuf[RX_LEN];
 extern uint8_t UartReceiveFlag;
+extern uint8_t UartReceiveLength;
 
 extern Timedata ReadTime;
 
@@ -57,13 +58,6 @@ float temperature;
 char wifiName[32];
 char wifiPassword[32];
 
-void MAIN_UI_GoUIMode(uint8_t mode) {
-  switch(mode) {
-    case UI_MODE_DEF: MAIN_UI_Def(); break;
-    case UI_MODE_CONNCTING: MAIN_UI_ConnectingWIFI(); break;
-    case UI_MODE_CONNCT_TIP: MAIN_UI_ConnectWifi(); break;
-  }
-}
 void MAIN_UI_ConnectWifi(void) {
 
   char ipBuf[16];
@@ -73,7 +67,7 @@ void MAIN_UI_ConnectWifi(void) {
 
   ESP8266_GetCurrentIP(ipBuf);
 
-  printf("CurrentIP : %s\n\r", ipBuf);
+  printf("CSW > CurrentIP : %s\n\r", ipBuf);
 
   OLED_Clear();
   OLED_ShowString(0, 0, "Use CLWApp to", 8);
@@ -88,8 +82,8 @@ void MAIN_UI_ConnectingWIFI() {
   currentUICanUseMenu = 0;
 
   OLED_Clear();
-  OLED_ShowString(0, 0, "Connecting", 8);
-  OLED_ShowString(0, 0, "WIFI...", 8);
+  OLED_ShowString(0, 0, "Connecting WIFI", 8);
+  OLED_ShowString(0, 1, "...", 8);
 }
 void MAIN_UI_ConnectWifiFailed(void) {
   currentUIMode = UI_MODE_CONNCT_ERR;
@@ -98,8 +92,8 @@ void MAIN_UI_ConnectWifiFailed(void) {
   OLED_Clear();
   OLED_ShowString(0, 0, "Connect WIFI Failed", 8);
 
-  OLED_ShowString(0, 3, "OK -> Retry", 8);
-  OLED_ShowString(0, 4, "CAN -> Config", 8);
+  OLED_ShowString(0, 3, "OK  > Retry", 8);
+  OLED_ShowString(0, 4, "CAN > Config", 8);
 }
 void MAIN_UI_Menu(uint8_t restoreOldMode) {
   if(restoreOldMode)
@@ -141,6 +135,13 @@ void MAIN_UI_WriteData() {
   OLED_ShowString(0, 4, buf, 8); 
   sprintf(buf, "%4.2f%%RH", humidness);
   OLED_ShowString(0, 5, buf, 8); 
+}
+void MAIN_UI_GoUIMode(uint8_t mode) {
+  switch(mode) {
+    case UI_MODE_DEF: MAIN_UI_Def(); break;
+    case UI_MODE_CONNCTING: MAIN_UI_ConnectingWIFI(); break;
+    case UI_MODE_CONNCT_TIP: MAIN_UI_ConnectWifi(); break;
+  }
 }
 
 //*******************************************************************************
@@ -198,23 +199,25 @@ void MAIN_ResetSettings() {
 }
 //连接阿里物联网服务器
 void MAIN_ConnectServer() {
-  printf("MAIN_ConnectServer");
+  printf("CSW > MAIN_ConnectServer");
   OLED_Clear();
   OLED_ShowString(0, 0, "OK!", 8);
   OLED_ShowString(0, 1, "> MAIN_ConnectServer", 8);
 }
 //开始工作
 void MAIN_StartWorker() {
-
+	loopTick = 59;
 }
 //连接WIFI
 void MAIN_DoConnectWIFI() {
   serverConnected = 0;
   MAIN_UI_ConnectingWIFI();
-  if(ESP8266_ConnectAP(wifiName, wifiPassword) == 0) {
+  if(ESP8266_ConnectAP(wifiName, wifiPassword) == 0)
+    MAIN_UI_ConnectWifiFailed();
+  else {
     MAIN_ConnectServer();
     MAIN_StartWorker();
-  }else MAIN_UI_ConnectWifiFailed();
+  }
 }
 //转为配置模式
 void MAIN_ToConfigMode() {
@@ -244,9 +247,9 @@ void MAIN_ReadDHT11() {
 }
 //刷新DS1302时间数据
 void MAIN_RefeshDS1302() {
-  DS1302_Read_Time();
-  if(isInLowMode == 0 && currentUIMode == UI_MODE_DEF) 
-    MAIN_UI_WriteTime();
+  //DS1302_Read_Time();
+  //if(isInLowMode == 0 && currentUIMode == UI_MODE_DEF) 
+  //  MAIN_UI_WriteTime();
 }
 
 //*******************************************************************************
@@ -276,7 +279,7 @@ void MAIN_Handler_KeyCode(char keyChar) {
     case UI_MODE_CONNCT_ERR: MAIN_DoConnectWIFI(); break;
     case UI_MODE_MENU: MAIN_UI_Def(); break;
     case UI_MODE_ASK_REBOOT: MAIN_Reboot(); break;
-    case UI_MODE_ASK_RESETSET: MAIN_ResetSettings(); break;
+    case UI_MODE_ASK_RESETSET: MAIN_ResetSettings(); MAIN_UI_Menu(0); break;
     }
     break;
   }
@@ -338,8 +341,11 @@ void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
   char ip[17];
 
   end = len;
-  for(pos = 1; pos < len; pos++)
-    if(buf[pos] == ':' || pos == len - 1) {
+  for(pos = 2; pos < len; pos++)
+    if(buf[pos] == ':') {
+      end = pos + 1;
+      break;
+    }else if(pos == len - 1) {
       end = pos;
       break;
     }
@@ -348,31 +354,56 @@ void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
   {
   case 'C': {//配置指令
   
-    if(strncmp(buf+1, "PASS", end - 1) == 0){
+    if(strncmp(buf + 2, "PASS", 4) == 0){
       strncpy(wifiPassword, buf + end, len - end);
-      AT24C02_WriteOnePage(1, 0, (uint8_t*)wifiPassword);//写入24C02
+      AT24C02_WriteOnePage(4, 0, (uint8_t*)wifiPassword);//按页写入24C02
+      AT24C02_WriteOnePage(5, 0, (uint8_t*)wifiPassword + 0x8);
+      AT24C02_WriteOnePage(6, 0, (uint8_t*)wifiPassword + 0x16);
+      AT24C02_WriteOnePage(7, 0, (uint8_t*)wifiPassword + 0x18);
     }
-    else if(strncmp(buf+1, "WIFI", end - 1) == 0) {
+    else if(strncmp(buf + 2, "WIFI", 4) == 0) {
       strncpy(wifiName, buf + end, len - end);
-      AT24C02_WriteOnePage(0, 0, (uint8_t*)wifiName);//写入24C02
+      AT24C02_WriteOnePage(0, 0, (uint8_t*)wifiName);//按页写入24C02
+      AT24C02_WriteOnePage(1, 0, (uint8_t*)wifiName + 0x8);
+      AT24C02_WriteOnePage(2, 0, (uint8_t*)wifiName + 0x16);
+      AT24C02_WriteOnePage(3, 0, (uint8_t*)wifiName + 0x18);
     }
+    else if(strncmp(buf + 2, "TIM", 3) == 0) {
 
+      ReadTime.year = (buf[pos + 2] << 8) + buf[pos + 3];
+      ReadTime.month = buf[pos + 4];
+      ReadTime.day = buf[pos + 5];
+      ReadTime.hour = buf[pos + 6];
+      ReadTime.minute = buf[pos + 7];
+      ReadTime.second = buf[pos + 8];
+      ReadTime.weekday = buf[pos + 9];
+
+      DS1302_Burst_Writetime();//写入DS1302
+    }
     break;
   }
   case 'M': {//控制指令
 
+    USART1_ClearRX();
+
     ESP8266_GetFirstConnectIP(ip);
 
-    if(strncmp(buf+1, "COONECT", end - 1) == 0) {
+    if(strncmp(buf + 2, "CONNECT", end - 2) == 0) {
   
+      Delay_MS(200);
+			
       if(ESP8266_StartTcp(ip, 5000) == 1)
-        ESP8266_SendData("OK", 3);
-
+        ESP8266_SendData("OK", 2);
+			
+			Delay_MS(500);
+			
       MAIN_DoConnectWIFI();//开始连接
     }
-    if(strncmp(buf+1, "TEST", end - 1) == 0) {
+    if(strncmp(buf + 2, "TEST", end - 2) == 0) {
+
+      Delay_MS(100);
       if(ESP8266_StartTcp(ip, 5000) == 1)
-        ESP8266_SendData("OK", 3);
+        ESP8266_SendData("OK", 2);
     }
     break;
   }
@@ -387,26 +418,26 @@ void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
  */
 void MAIN_Init(void)
 {
-  printf("CSW Boot");
+  printf("CSW > Boot");
 
   //初始化外设
   LED_init();
   OLED_Init();
   DS1302_Init();
   KEYPAD_Init();
-  DHT11_Reset();
+  DHT11_Init();
   
   HAL_TIM_Base_Start_IT(&htim2); //启动定时器
 
   //初始化 ESP8266
   if (ESP8266_Init() == 0)
   {
-    printf("ESP8266_Init Failed !");
+    printf("CSW > ESP8266_Init Failed !\n");
     MAIN_UI_InitFail();
     return;
   }
 
-  printf("ESP8266_Init ok");
+  printf("CSW > ESP8266_Init Ok\n");
 
   //读取设置
   MAIN_ReadSettings();
@@ -441,7 +472,7 @@ void MAIN_Loop(void)
 
     //计数器
     if(loopTick < 0xfffe) loopTick++;
-    else loopTick == 0;
+    else loopTick = 0;
 
     //每一分钟采集一次数据
     if(loopTick % 60 == 0) {
@@ -465,9 +496,11 @@ void MAIN_Loop(void)
 
   //ESP8266 UART接收
   if(USART1_GetReceiveFlag()) {
-    Delay_MS(100);
+#if ENABLE_UART_OUTPUT
+    printf("ESP8266 > (%d) %s\n", UartReceiveLength, UartRxBuf);
+#endif
     ESP8266_ReceiveHandle();
-  }
+  } 
 
   Delay_MS(40);
 }

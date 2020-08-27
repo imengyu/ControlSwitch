@@ -14,7 +14,11 @@
 
 #include "stm32f1xx_hal.h"
 
-#define RX_LEN 256  
+#define RX_LEN 512  
+
+//是否开启输出esp8266的串口数据到printf
+#define ENABLE_UART_OUTPUT 1 
+
 
 uint8_t ESP8266_Init(void);
 uint8_t ESP8266_Check(void);
@@ -114,7 +118,7 @@ uint8_t ESP8266_CloseConfigServer(void);
  * @param port 目标端口
  * @return 返回1成功，返回0不成功
  */
-uint8_t ESP8266_StartTcp(char*ip, uint8_t port);
+uint8_t ESP8266_StartTcp(char*ip, uint16_t port);
 /**
  * ESP8266发送数据
  * @param data 数据

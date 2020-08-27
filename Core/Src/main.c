@@ -14,8 +14,8 @@
   * License. You may obtain a copy of the License at:
   *                        opensource.org/licenses/BSD-3-Clause
   * 
-  * �?????发芯片：stm32f103c8t6
-  * �?????发板：stm32f103c8t6�?????小系统板
+  * �?????发芯片：stm32f103c8t6
+  * �?????发板：stm32f103c8t6�?????小系统板
   *
   ******************************************************************************
   */
@@ -140,7 +140,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+    MAIN_Loop();
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
