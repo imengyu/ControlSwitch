@@ -23,4 +23,11 @@ void MAIN_Init(void);
  */
 void MAIN_Loop(void);
 
+
+void MAIN_UpdateSwSettings(uint8_t index);
+void MAIN_SwitchLowMode(uint8_t mode);
+
+
+
 #endif
+

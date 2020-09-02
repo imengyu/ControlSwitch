@@ -25,8 +25,13 @@ void Delay_MS(uint16_t nms);
  * @param  nms 微秒
  * @retval None
  */
-void Delay_US(uint32_t us);
-
+#define Delay_US Delay_US_TIM
+/**
+ * @brief 定时器延时微秒
+ * @param  nms 微秒（量程0-65534ms）
+ * @retval None
+ */
+void Delay_US_TIM(uint16_t us);
 
 #endif
 

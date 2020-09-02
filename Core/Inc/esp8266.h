@@ -15,9 +15,10 @@
 #include "stm32f1xx_hal.h"
 
 #define RX_LEN 512  
+#define TX_LEN 512  
 
 //是否开启输出esp8266的串口数据到printf
-#define ENABLE_UART_OUTPUT 1 
+#define ENABLE_UART_OUTPUT 0
 
 
 uint8_t ESP8266_Init(void);

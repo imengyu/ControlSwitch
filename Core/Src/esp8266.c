@@ -14,13 +14,13 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-
+#include "utils.h"
 
 extern UART_HandleTypeDef huart1; 
 extern DMA_HandleTypeDef hdma_usart1_rx;
 extern DMA_HandleTypeDef hdma_usart1_tx;
 
-char UartTxBuf[64];
+char UartTxBuf[TX_LEN];
 char UartRxBuf[RX_LEN];
 uint8_t UartReceiveFlag = 0;
 uint8_t UartReceiveLength = 0;
@@ -50,7 +50,11 @@ void USART1_Handler(UART_HandleTypeDef *huart)
       UartReceiveFlag = 1; //接受完成标志位置1  
       UartRxBuf[UartReceiveLength] = '\0';//末尾加0
 
-      HAL_UART_Receive_DMA(&huart1, (uint8_t*)UartRxBuf, RX_LEN);//重新打开DMA接收  
+      HAL_UART_Receive_DMA(&huart1, (uint8_t*)UartRxBuf, RX_LEN);//重新打开DMA接收 
+
+#if ENABLE_UART_OUTPUT
+      Debug_Debug("ESP8266", " > (%d) %s\n", UartReceiveLength, UartRxBuf);
+#endif 
     }
   }
 } 
@@ -139,7 +143,7 @@ void ESP8266_ATSendString(char*str) {
   if(str != UartTxBuf)
     strcpy(UartTxBuf, str);
 #if ENABLE_UART_OUTPUT
-  printf("ESP8266 < %s\n", str);
+  Debug_Debug("ESP8266", " < %s\n", str);
 #endif
   HAL_UART_Transmit(&huart1, (uint8_t*)UartTxBuf, strlen(UartTxBuf), 100);
 }
@@ -151,7 +155,7 @@ void ESP8266_ATSendString(char*str) {
  */
 void ESP8266_ATSendBuf(uint8_t *str, uint16_t len) {
 #if ENABLE_UART_OUTPUT
-  printf("ESP8266 < %s\n", str);
+  Debug_Debug("ESP8266", " < buffer (%d) %s\n", len, str);
 #endif
   HAL_UART_Transmit(&huart1, str, len, 100);
 }
@@ -215,27 +219,27 @@ uint8_t ESP8266_ConnectAP(char* ssid, char* pswd)
 uint8_t ESP8266_ConnectServer(char* mode, char* ip, uint16_t port)
 {
 	uint8_t cnt;
-   
-	ESP8266_ExitUnvarnishedTrans();                   //多次连接需退出透传
-	Delay_MS(500);
+
+  //设置透传模式
+	if(ESP8266_OpenTransmission() == 0) 
+    return 0;
 
 	//连接服务器
+  USART1_ClearTX();
+  USART1_ClearRX();//清空接收缓冲   
+  sprintf((char*)UartTxBuf,"AT+CIPSTART=\"%s\",\"%s\",%d\r\n",mode,ip,port);
+  ESP8266_ATSendString((char*)UartTxBuf);
+
 	cnt=2;
 	while(cnt--)
 	{
-		USART1_ClearTX();
-		USART1_ClearRX();//清空接收缓冲   
-		sprintf((char*)UartTxBuf,"AT+CIPSTART=\"%s\",\"%s\",%d\r\n",mode,ip,port);
-		ESP8266_ATSendString((char*)UartTxBuf);
-		if(FindStr((char*)UartRxBuf, "CONNECT", 8000) !=0 )
+		if(FindStr((char*)UartRxBuf, "ALREADY CONNECTED", 4000) != 0)
 			break;
+    if(FindStr((char*)UartRxBuf, "OK", 4000) != 0)
+      break;
 	}
 	if(cnt == 0) 
 		return 0;
-	
-	//设置透传模式
-	if(ESP8266_OpenTransmission() == 0) 
-    return 0;
 	
 	//开启发送状态
 	cnt=2;
@@ -258,14 +262,14 @@ uint8_t ESP8266_DisconnectServer(void)
 	uint8_t cnt;
 	
 	ESP8266_ExitUnvarnishedTrans();	//退出透传
-	HAL_Delay(500);
+	Delay_MS(500);
 	
 	while(cnt--)
 	{
 		USART1_ClearRX(); //清空接收缓冲   
 		ESP8266_ATSendString("AT+CIPCLOSE\r\n");//关闭链接
 
-		if(FindStr((char*)UartRxBuf,"CLOSED",200)!=0)//操作成功,和服务器成功断开
+		if(FindStr((char*)UartRxBuf, "CLOSED", 200)!=0)//操作成功,和服务器成功断开
 			break;
 	}
 	if(cnt) 
@@ -461,8 +465,8 @@ uint8_t ESP8266_CloseConfigServer() {
  */
 void ESP8266_ExitUnvarnishedTrans(void)
 {
-	ESP8266_ATSendString("+++"); Delay_MS(50);
-	ESP8266_ATSendString("+++"); Delay_MS(50);	
+	ESP8266_ATSendString("+++"); 
+  Delay_MS(50);	
 }
 
 /**

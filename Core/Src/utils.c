@@ -15,3 +15,20 @@ unsigned char DecToBCD(unsigned char mData)
   return BCD;
 }
 
+
+uint16_t genBase = 0;
+uint16_t genNoDuplicateInteger(void) {
+  if(genBase > 0xffff - 1) genBase = 0;
+  return genBase++;
+}
+
+//取0a,x]的随机整数
+uint16_t genRandomInteger(uint16_t x) {
+  return rand() %(x + 1); 
+}
+//取得(a,b]的随机整数
+uint16_t genRandomIntegerRange(uint16_t a, uint16_t b) {
+  return rand() %(b-a) + a; 
+}
+
+

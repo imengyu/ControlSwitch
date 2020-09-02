@@ -64,7 +64,6 @@ char KEYPAD_Scan(void)
     while (KEYPAD_Row_Scan() != 0)
       ; //消抖
     Key_Num = 0 + key_row_num;
-    //printf("Key_Clo_1\r\n");
   }
   KEY_CLO0_OUT_HIGH;
   KEY_CLO1_OUT_LOW;
@@ -73,7 +72,6 @@ char KEYPAD_Scan(void)
     while (KEYPAD_Row_Scan() != 0)
       ;
     Key_Num = 4 + key_row_num;
-    //printf("Key_Clo_2\r\n");
   }
   KEY_CLO1_OUT_HIGH;
 
@@ -83,21 +81,14 @@ char KEYPAD_Scan(void)
     while (KEYPAD_Row_Scan() != 0)
       ;
     Key_Num = 8 + key_row_num;
-    //printf("Key_Clo_3\r\n");
   }
   KEY_CLO2_OUT_HIGH;
   KEY_CLO3_OUT_LOW;
   if ((key_row_num = KEYPAD_Row_Scan()) != 0)
   {
-    //        Key_row[0] = HAL_GPIO_ReadPin(GPIOE,KEY_col0_Pin)<<3;
-    //        Key_row[0] = Key_row[0] | (HAL_GPIO_ReadPin(GPIOE,KEY_col1_Pin)<<2);
-    //        Key_row[0] = Key_row[0] | (HAL_GPIO_ReadPin(GPIOE,KEY_col2_Pin)<<1);
-    //        Key_row[0] = Key_row[0] | (HAL_GPIO_ReadPin(GPIOE,KEY_col3_Pin));
-    //        printf("Key_Clo4_DATA = 0x%x\r\n",Key_row[0]);
     while (KEYPAD_Row_Scan() != 0)
       ;
     Key_Num = 12 + key_row_num;
-    //printf("Key_Clo_4\r\n");
   }
   KEY_CLO3_OUT_HIGH;
   return Key_Num;

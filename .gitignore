@@ -1,4 +1,6 @@
 .vscode/
 build/
 __pycache__/
-ControlSwitch/MDK-ARM/ControlSwitch
+MDK-ARM/ControlSwitch
+ControlSwitchPCB/History
+ControlSwitchPCB/Project Logs for ControlSwitchPCB

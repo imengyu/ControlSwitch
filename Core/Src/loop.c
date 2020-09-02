@@ -14,6 +14,7 @@
 #include "oled.h"
 #include "oled_font.h"
 #include "esp8266.h"
+#include "esp8266_mqtt.h"
 #include "24c02.h"
 #include "stdio.h"
 #include "string.h"
@@ -21,10 +22,26 @@
 #include "ds1302.h"
 #include "dht11.h"
 
+//*******************************************************************************
+
+//阿里云MQTT接入信息
+
+#define MQTT_BROKERADDRESS "a1GJvSV1TYm.iot-as-mqtt.cn-shanghai.aliyuncs.com" //节点
+#define MQTT_CLIENTID "000001|securemode=3,signmethod=hmacsha1|"
+#define MQTT_USARNAME "DEBUG&a1GJvSV1TYm"
+#define MQTT_PASSWD "4550C1212BB2E3E255FB1DE26499C275E95062EF"
+
+//通信 Topic 
+#define MQTT_TOPIC_SET_PROP "/sys/a1GJvSV1TYm/DEBUG/thing/service/property/set"
+#define MQTT_TOPIC_POST_PROP "/sys/a1GJvSV1TYm/DEBUG/thing/event/property/post"
+
+//*******************************************************************************
+
 extern UART_HandleTypeDef huart1; 
 extern UART_HandleTypeDef huart3; 
 
 extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
 
 //*******************************************************************************
 
@@ -33,6 +50,8 @@ extern uint8_t UartReceiveFlag;
 extern uint8_t UartReceiveLength;
 
 extern Timedata ReadTime;
+
+
 
 //*******************************************************************************
 //系统状态变量
@@ -44,13 +63,24 @@ uint16_t loopTick = 0;
 uint16_t lastKeyTick = 0;
 uint8_t serverConnected = 0;
 uint8_t isInLowMode = 0;
+uint8_t mainSwModified = 0;
 
 uint8_t currentUIMode = 0;
 uint8_t oldUIMode = 0;
 uint8_t currentUICanUseMenu = 1;
+uint8_t uiIndex = 0;
 
-float humidness;
-float temperature;
+uint8_t testTick = 0;
+
+//主开关数据
+uint8_t switchMainDebug = 0;
+uint8_t switchMainA = 0;
+uint8_t switchMainB = 0;
+uint8_t switchMainC = 0;
+
+//温度数据
+extern float humidness;
+extern float temperature;
 
 //*******************************************************************************
 //系统设置变量
@@ -67,7 +97,7 @@ void MAIN_UI_ConnectWifi(void) {
 
   ESP8266_GetCurrentIP(ipBuf);
 
-  printf("CSW > CurrentIP : %s\n\r", ipBuf);
+  Debug_Info("CSW", "CurrentIP : %s\n\r", ipBuf);
 
   OLED_Clear();
   OLED_ShowString(0, 0, "Use CLWApp to", 8);
@@ -85,6 +115,14 @@ void MAIN_UI_ConnectingWIFI() {
   OLED_ShowString(0, 0, "Connecting WIFI", 8);
   OLED_ShowString(0, 1, "...", 8);
 }
+void MAIN_UI_ConnectingServer() {
+  currentUIMode = UI_MODE_CONNCTING;
+  currentUICanUseMenu = 0;
+
+  OLED_Clear();
+  OLED_ShowString(0, 0, "Connecting ", 8);
+  OLED_ShowString(0, 1, "Server...", 8);
+}
 void MAIN_UI_ConnectWifiFailed(void) {
   currentUIMode = UI_MODE_CONNCT_ERR;
   currentUICanUseMenu = 0;
@@ -95,19 +133,37 @@ void MAIN_UI_ConnectWifiFailed(void) {
   OLED_ShowString(0, 3, "OK  > Retry", 8);
   OLED_ShowString(0, 4, "CAN > Config", 8);
 }
+void MAIN_UI_ConnectServerFailed(void) {
+  currentUIMode = UI_MODE_CONNCT_SERVER_ERR;
+  currentUICanUseMenu = 0;
+
+  OLED_Clear();
+  OLED_ShowString(0, 0, "Connect Server Failed !", 8);
+
+  OLED_ShowString(0, 3, "OK  > Retry", 8);
+  OLED_ShowString(0, 4, "CAN > Config", 8);
+}
+
 void MAIN_UI_Menu(uint8_t restoreOldMode) {
   if(restoreOldMode)
     oldUIMode = currentUIMode;
   currentUIMode = UI_MODE_MENU;
   currentUICanUseMenu = 0;
+  uiIndex = 0;
 
   OLED_Clear();
-  OLED_ShowString(0, 0, "CSW Menu", 8);
+  OLED_ShowString(0, uiIndex++, "CSW Menu", 8);
 
-  OLED_ShowString(0, 1, "1 > Reboot", 8);
-  OLED_ShowString(0, 2, "2 > ResetSetting", 8);
-  OLED_ShowString(0, 3, "3 > ConfigMode", 8);
-  OLED_ShowString(0, 3, "C > Back", 8);
+  OLED_ShowString(0, uiIndex++, "1 > Reboot", 8);
+  OLED_ShowString(0, uiIndex++, "2 > ResetSetting", 8);
+  OLED_ShowString(0, uiIndex++, "3 > ConfigMode", 8);
+  
+  if(serverConnected) {
+    OLED_ShowString(0, uiIndex++, "8 > ForceUpdate", 8);
+    OLED_ShowString(0, uiIndex++, "9 > Disconnect", 8);
+  }
+
+  OLED_ShowString(0, 7, "C > Back", 8);
 }
 void MAIN_UI_Def() {
   currentUIMode = UI_MODE_DEF;
@@ -143,6 +199,12 @@ void MAIN_UI_GoUIMode(uint8_t mode) {
     case UI_MODE_CONNCT_TIP: MAIN_UI_ConnectWifi(); break;
   }
 }
+void MAIN_UI_Disconnected() {
+  currentUIMode = UI_MODE_MESSAGE;
+
+  OLED_Clear();
+  OLED_ShowString(0, 0, "Disconnected !", 8);
+}
 
 //*******************************************************************************
 
@@ -169,6 +231,73 @@ void MAIN_UI_AskResetSettings() {
 
 //*******************************************************************************
 
+//*******************************************************************************
+
+//读取设置
+void MAIN_ReadSettings() {
+  uint8_t buf[8];
+
+  //WIFI 配置
+  memset(wifiName, 0, sizeof(wifiName));
+  memset(wifiPassword, 0, sizeof(wifiName));
+
+  AT24C02_Read(ADDR_WIFI_NAME, 32, (uint8_t*)&wifiName);
+  AT24C02_Read(ADDR_WIFI_PASS, 32, (uint8_t*)&wifiPassword);
+
+  //主控设置
+  AT24C02_Read(0x40, 8, buf);
+  switchMainDebug = buf[0];
+  switchMainA = buf[1];
+  switchMainB = buf[2];
+  switchMainC = buf[3];
+
+  MAIN_UpdateSwSettings(0);
+  MAIN_UpdateSwSettings(1);
+  MAIN_UpdateSwSettings(2);
+  MAIN_UpdateSwSettings(3);
+
+  mainSwModified = 0;
+}
+//设置还原
+void MAIN_ResetSettings() {
+  memset(wifiName, 0, sizeof(wifiName));
+  memset(wifiPassword, 0, sizeof(wifiName));
+
+  AT24C02_FlushAll();
+}
+//保存主控设置
+void MAIN_SaveMainSwSettings() {
+  uint8_t buf[8];
+  buf[0] = switchMainDebug;
+  buf[2] = switchMainA;
+  buf[3] = switchMainB;
+  buf[4] = switchMainC;
+
+  AT24C02_WriteOnePage(8, 0, buf);
+
+  mainSwModified = 0;
+}
+
+
+//*******************************************************************************
+
+void MAIN_UpdateSwSettings(uint8_t index) {
+  mainSwModified = 1;
+  switch (index)
+  {
+  case 0:
+    break;
+  case 1:
+    break;
+  case 2:
+    break;
+  case 3:
+    break;
+  default:
+    break;
+  }
+}
+
 void MAIN_SwitchLowMode(uint8_t mode) {
   if(isInLowMode != mode) {
     isInLowMode = mode;
@@ -182,32 +311,55 @@ void MAIN_SwitchLowMode(uint8_t mode) {
   }
   
 }
-//读取设置
-void MAIN_ReadSettings() {
-  memset(wifiName, 0, sizeof(wifiName));
-  memset(wifiPassword, 0, sizeof(wifiName));
 
-  AT24C02_Read(ADDR_WIFI_NAME, 32, (uint8_t*)&wifiName);
-  AT24C02_Read(ADDR_WIFI_PASS, 32, (uint8_t*)&wifiPassword);
-}
-//设置还原
-void MAIN_ResetSettings() {
-  memset(wifiName, 0, sizeof(wifiName));
-  memset(wifiPassword, 0, sizeof(wifiName));
+//*******************************************************************************
 
-  AT24C02_FlushAll();
-}
 //连接阿里物联网服务器
 void MAIN_ConnectServer() {
-  printf("CSW > MAIN_ConnectServer");
-  OLED_Clear();
-  OLED_ShowString(0, 0, "OK!", 8);
-  OLED_ShowString(0, 1, "> MAIN_ConnectServer", 8);
+  serverConnected = 0;
+  Debug_Info("CSW", "MAIN_ConnectServer...\n");
+
+  MAIN_UI_ConnectingServer();
+
+  if(ESP8266_ConnectServer("TCP", MQTT_BROKERADDRESS, 1883) != 0) {
+
+    MQTT_Init();
+    if(MQTT_Connect(MQTT_CLIENTID, MQTT_USARNAME, MQTT_PASSWD) != 0) {
+      MAIN_UI_Def();
+      serverConnected = 1;
+      //订阅MQTT主题
+			if(MQTT_SubscribeTopic(MQTT_TOPIC_SET_PROP, 0, 1) == 0)
+		    Debug_Error("CSW", "MQTT_SubscribeTopic %s failed! \n", MQTT_TOPIC_SET_PROP);
+
+      Debug_Info("CSW", "ConnectServer success!\n");
+		}
+		else {
+      Debug_Error("CSW", "Connect aliyun iot mqtt failed! \n");
+      MAIN_UI_ConnectServerFailed();
+    }
+	}
+	else {
+    Debug_Error("CSW", "Connect aliyun iot server failed! \n");
+    MAIN_UI_ConnectServerFailed();
+  }
 }
+//断开与服务器的连接
+void MAIN_DisConnectServer() {
+  if(serverConnected == 1) {
+    MQTT_Disconnect();
+    ESP8266_ExitUnvarnishedTrans();
+    ESP8266_DisconnectServer();
+    serverConnected = 0;
+     Debug_Info("CSW", "DisconnectServer!\n");
+  }
+
+}
+
 //开始工作
 void MAIN_StartWorker() {
 	loopTick = 59;
 }
+
 //连接WIFI
 void MAIN_DoConnectWIFI() {
   serverConnected = 0;
@@ -215,6 +367,7 @@ void MAIN_DoConnectWIFI() {
   if(ESP8266_ConnectAP(wifiName, wifiPassword) == 0)
     MAIN_UI_ConnectWifiFailed();
   else {
+		Debug_Info("CSW", "Connect WIFI %s success!\n", wifiName);
     MAIN_ConnectServer();
     MAIN_StartWorker();
   }
@@ -235,15 +388,10 @@ void MAIN_Reboot() {
 
 //读取DHT11数据
 void MAIN_ReadDHT11() {
-  uint8_t buffer[5];
-  if (DHT11_Read_Data(buffer) == 0)
-  {
-    humidness = buffer[0] + buffer[1] / 10.0f;
-    temperature = buffer[2] + buffer[3] / 10.0f;
-  }
+  DHT11_Read_Data_Float();
 
   if(isInLowMode == 0 && currentUIMode == UI_MODE_DEF) 
-    MAIN_UI_WriteData();
+     MAIN_UI_WriteData();
 }
 //刷新DS1302时间数据
 void MAIN_RefeshDS1302() {
@@ -254,12 +402,56 @@ void MAIN_RefeshDS1302() {
 
 //*******************************************************************************
 
+//上报数据至服务器
+void MAIN_PostDataToServer() {
+  char mqtt_message[200];
+  sprintf(mqtt_message,
+"{\"method\":\"thing.event.property.pos\",id:\"%d\",\"params\":{\
+\"CurrentTemperature\":%.1f,\
+\"RelativeHumidity\":%.1f,\
+\"PowerState\":%d,\
+},\"version\":\"1.0\"}",
+    genNoDuplicateInteger(),
+    (float)temperature,
+    (float)humidness,
+    switchMainDebug == 1 ? 1 : 0
+	);
+
+	MQTT_PublishData(MQTT_TOPIC_POST_PROP, mqtt_message, 0);
+}
+
+//*******************************************************************************
+
+//处理云平台接收的数据
+void MAIN_Handler_CloudCommand(char*buf, uint16_t len) {
+  char* pos = 0;
+  buf = strstr(buf, "params\":");
+  if(buf != 0) {
+    pos = strstr(buf, "powerstate");
+    if(pos != 0) {
+      if(*(pos+13) == '1') {
+        switchMainDebug = 1;
+        LED_MainOn();
+      }else if(*(pos+13) == '0') {
+        switchMainDebug = 0;
+        LED_MainOff();
+      }
+    }
+  }
+}
 //按键处理
 void MAIN_Handler_KeyCode(char keyChar) {
+
+  //any key handler
   if(currentUIMode == UI_MODE_BOOT_FAIL) {
     MAIN_Reboot();
     return;
+  }else if(currentUIMode == UI_MODE_MESSAGE) {
+    MAIN_UI_Menu(0);
+    return;
   }
+
+  //UI Key handler
   switch (keyChar)
   {
   case KEY_MENU: if(currentUICanUseMenu) MAIN_UI_Menu(1); break;
@@ -270,6 +462,7 @@ void MAIN_Handler_KeyCode(char keyChar) {
     case UI_MODE_ASK_REBOOT: MAIN_UI_Menu(0); break;
     case UI_MODE_ASK_RESETSET: MAIN_UI_Menu(0); break;
     case UI_MODE_CONNCT_ERR: MAIN_ToConfigMode(); break;
+    case UI_MODE_CONNCT_SERVER_ERR: MAIN_ToConfigMode(); break;
     }
     break;
   }
@@ -280,6 +473,7 @@ void MAIN_Handler_KeyCode(char keyChar) {
     case UI_MODE_MENU: MAIN_UI_Def(); break;
     case UI_MODE_ASK_REBOOT: MAIN_Reboot(); break;
     case UI_MODE_ASK_RESETSET: MAIN_ResetSettings(); MAIN_UI_Menu(0); break;
+    case UI_MODE_CONNCT_SERVER_ERR: MAIN_ConnectServer(); break;
     }
     break;
   }
@@ -304,6 +498,28 @@ void MAIN_Handler_KeyCode(char keyChar) {
     }
     break;
   }
+  case '8': {
+    switch (currentUIMode)
+    {
+    case UI_MODE_MENU: 
+      loopTick = 59;
+      MAIN_UI_GoUIMode(oldUIMode);
+      break;
+    }
+    break;
+  }
+  case '9': {
+    switch (currentUIMode)
+    {
+    case UI_MODE_MENU: 
+      MAIN_DisConnectServer();
+      MAIN_UI_Disconnected();
+      break;
+    }
+    break;
+  }
+  default:
+    break;
   }
 }
 //按键处理
@@ -349,6 +565,8 @@ void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
       end = pos;
       break;
     }
+
+  Debug_Debug("CSW", "Handler_WifiCommand (%d) : %s", len, buf);
 
   switch (buf[0])
   {
@@ -407,6 +625,12 @@ void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
     }
     break;
   }
+  case 0x30: {//MQTT Alink 云平台到设备消息
+    MAIN_Handler_CloudCommand(buf + 4, len - 4);
+    break;
+  }
+  default:
+    break;
   }
 
 }
@@ -418,7 +642,23 @@ void MAIN_Handler_WifiCommand(char*buf, uint16_t len) {
  */
 void MAIN_Init(void)
 {
-  printf("CSW > Boot");
+  Debug_Info("CSW", "Booting\n");
+
+  DHT11_Init();
+
+  Delay_MS(1200);
+  DHT11_Read_Data_Float();
+
+  Debug_Info("CSW", "temperature : %f , humidness : %f \n", temperature, humidness);  
+
+
+  //启动定时器
+  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_Base_Start_IT(&htim3); 
+
+	return;
+
+  //Debug_Info("CSW", "PCLK1Freq : %d\n", HAL_RCC_GetPCLK1Freq());  
 
   //初始化外设
   LED_init();
@@ -426,18 +666,17 @@ void MAIN_Init(void)
   DS1302_Init();
   KEYPAD_Init();
   DHT11_Init();
-  
-  HAL_TIM_Base_Start_IT(&htim2); //启动定时器
+
+  MAIN_ReadDHT11();
+  return;
 
   //初始化 ESP8266
   if (ESP8266_Init() == 0)
   {
-    printf("CSW > ESP8266_Init Failed !\n");
+    Debug_Error("CSW", "ESP8266_Init Failed !\n");
     MAIN_UI_InitFail();
     return;
   }
-
-  printf("CSW > ESP8266_Init Ok\n");
 
   //读取设置
   MAIN_ReadSettings();
@@ -474,10 +713,19 @@ void MAIN_Loop(void)
     if(loopTick < 0xfffe) loopTick++;
     else loopTick = 0;
 
-    //每一分钟采集一次数据
+    //每300秒发送MQTT心跳包
+    if(serverConnected && loopTick % 300 == 0) MQTT_SentHeart();
+
+    //每一分钟采集上报一次数据
     if(loopTick % 60 == 0) {
+
       MAIN_ReadDHT11();
-      
+
+      //上报数据
+      if(serverConnected) MAIN_PostDataToServer();
+
+      //如果更改了状态，则保存状态
+      if(mainSwModified) MAIN_SaveMainSwSettings();
     }
 
     //每秒读取DS1302
@@ -496,9 +744,7 @@ void MAIN_Loop(void)
 
   //ESP8266 UART接收
   if(USART1_GetReceiveFlag()) {
-#if ENABLE_UART_OUTPUT
-    printf("ESP8266 > (%d) %s\n", UartReceiveLength, UartRxBuf);
-#endif
+
     ESP8266_ReceiveHandle();
   } 
 
@@ -509,8 +755,6 @@ void MAIN_Loop(void)
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  if(htim->Instance == TIM2) {
-    tim1sActived = 1;
-  }
+  if(htim->Instance == TIM2) tim1sActived = 1;
 }
 

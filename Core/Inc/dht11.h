@@ -6,18 +6,16 @@
 #define DHT11_GPIO_PORT  GPIOA
 #define DHT11_GPIO_PIN   GPIO_PIN_8
 
-#define DHT11_OUT_H HAL_GPIO_WritePin(DHT11_GPIO_PORT, DHT11_GPIO_PIN, GPIO_PIN_SET)
-#define DHT11_OUT_L HAL_GPIO_WritePin(DHT11_GPIO_PORT, DHT11_GPIO_PIN, GPIO_PIN_RESET)
-#define DHT11_IN    HAL_GPIO_ReadPin(DHT11_GPIO_PORT, DHT11_GPIO_PIN)
-
-void DHT11_GPIO_Input(void);
-void DHT11_GPIO_Output(void);
+//IO方向设置
+//#define DHT11_IO_IN()  {DHT11_GPIO_PORT->CRH &= 0xFFFFFFF0;	DHT11_GPIO_PORT->CRH |= 4;}	// PA8 IN  MODE
+//#define DHT11_IO_OUT() {DHT11_GPIO_PORT->CRH &= 0xFFFFFFF0;	DHT11_GPIO_PORT->CRH |= 3;}	// PA8 OUT MODE
 
 void DHT11_Init(void);
 void DHT11_Reset(void);
-uint16_t DHT11_Scan(void);
-uint16_t DHT11_Read_Bit(void);
-uint16_t DHT11_Read_Byte(void);
-uint16_t DHT11_Read_Data(uint8_t *buffer);
+uint8_t DHT11_Check(void);
+uint8_t DHT11_Read_Bit(void);
+uint8_t DHT11_Read_Byte(void);
+uint8_t DHT11_Read_Data(uint8_t *buffer);
+uint8_t DHT11_Read_Data_Float(void);
 
 #endif

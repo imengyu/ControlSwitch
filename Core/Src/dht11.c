@@ -1,99 +1,136 @@
 #include "dht11.h"
 #include "delay.h"
+#include "utils.h"
 
-void DHT11_GPIO_Input(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct;
-  
-  GPIO_InitStruct.Pin = DHT11_GPIO_PIN;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT; //浮空输入
-  
-  HAL_GPIO_Init(DHT11_GPIO_PORT, &GPIO_InitStruct);
-}
-void DHT11_GPIO_Output(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct;
-  
-  GPIO_InitStruct.Pin = DHT11_GPIO_PIN;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP; //推挽输出
+float humidness;
+float temperature;
+uint8_t dht11IO = 0;
+uint8_t dht11test = 0;
 
-  HAL_GPIO_Init(DHT11_GPIO_PORT, &GPIO_InitStruct);
-}
+#define DHT11_OUT(x) HAL_GPIO_WritePin(DHT11_GPIO_PORT, DHT11_GPIO_PIN, x)
+
+/**
+ * DHT11初始化
+ */
 void DHT11_Init(void)
 {
+  humidness = 0;
+  temperature = 0;
 }
-void DHT11_Reset(void)
-{
+
+uint8_t DHT11_DO_IN(void) {
+  return HAL_GPIO_ReadPin(DHT11_GPIO_PORT, DHT11_GPIO_PIN);
+}
+
+void DHT11_IO_OUT(void) {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitStruct.Pin = DHT11_GPIO_PIN;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(DHT11_GPIO_PORT, &GPIO_InitStruct);
+}
+void DHT11_IO_IN(void) {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitStruct.Pin = DHT11_GPIO_PIN;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(DHT11_GPIO_PORT, &GPIO_InitStruct);
+}
+
+/**
+ * DHT11开始
+ * @return 返回1出现错误，返回0成功
+ */
+uint8_t DHT11_Start(void)
+{ 
+  uint8_t retry;
+
   // 按照DHT11手册步骤
-  DHT11_GPIO_Output();
-  DHT11_OUT_L;
-  Delay_US(19000);
-  DHT11_OUT_H;
-  Delay_US(30);
-  DHT11_GPIO_Input();
+  DHT11_IO_OUT();
+  DHT11_OUT(GPIO_PIN_SET);
+  Delay_MS(20);
+  DHT11_OUT(GPIO_PIN_RESET);//拉低18ms
+  Delay_MS(20);
+  DHT11_OUT(GPIO_PIN_SET);//拉高
+  DHT11_IO_IN();
+  
+  retry = 0; //等待变为低电平
+  while (DHT11_DO_IN() == 1 && retry < 200) 
+  {
+    retry++;
+    Delay_US(1);
+  }
+  if(retry >= 200) {
+    Debug_Debug("DHT11", "err1 %d",retry);
+    return 1;
+  }
+
+  retry = 0; //等待变为高电平
+  while (DHT11_DO_IN() == 0 && retry < 200) 
+  {
+    retry++;
+    Delay_US(1);
+  }
+  if(retry >= 200) {
+    Debug_Debug("DHT11", "err2 %d",retry);
+    return 1;
+  }
+
+  //开始传输数据
+  return 0;
 }
 
-uint16_t DHT11_Scan(void)
-{
-  return DHT11_IN;
-}
 
-uint16_t DHT11_Read_Bit(void)
+uint8_t DHT11_Read_Byte(void)
 {
-    while (DHT11_IN == RESET);
-    Delay_US(40);
-    if (DHT11_IN == SET)
+  uint8_t retry;
+  uint8_t i;
+  uint8_t data = 0;
+  for (i = 0; i < 8; i++)
+  {
+    //等待变为低电平
+    retry = 0;
+    while (DHT11_DO_IN() == 1 && retry < 50) 
     {
-        while (DHT11_IN == SET);
-        return 1;
+      retry++;
+      Delay_US(1);
     }
-    else
+    //等待变为高电平
+    retry = 0;
+    while (DHT11_DO_IN() == 0 && retry < 50) 
     {
-        return 0;
+      retry++;
+      Delay_US(1);
     }
-}
 
-uint16_t DHT11_Read_Byte(void)
-{
-    uint16_t i;
-    uint16_t data = 0;
-    for (i = 0; i < 8; i++)
-    {
-        data <<= 1;
-        data |= DHT11_Read_Bit();
-    }
-    return data;
-}
-
-uint16_t DHT11_Read_Data(uint8_t *buffer)
-{
-    uint16_t i = 0;
+    //高电平 26-28us 为0 , 70us为1
+    Delay_US(30); //wait 40us
     
-    DHT11_Reset();
-    if (DHT11_Scan() == RESET)
+    data <<= 1;
+    data |= DHT11_DO_IN();
+  }
+  return data;
+}
+
+uint8_t DHT11_Read_Data_Float(void)
+{
+  uint8_t buf[5];
+  uint8_t i;
+  if(DHT11_Start() == 0) {
+
+    for (i = 0; i < 5; i++) //读取40位数据
     {
-        //检测到DHT11响应
-        while (DHT11_Scan() == RESET);
-        while (DHT11_Scan() == SET);
-        for (i = 0; i < 5; i++)
-        {
-            buffer[i] = DHT11_Read_Byte();
-        }
-        
-        while (DHT11_Scan() == RESET);
-        DHT11_GPIO_Output();
-        DHT11_OUT_H;
-        
-        uint8_t checksum = buffer[0] + buffer[1] + buffer[2] + buffer[3];
-        if (checksum != buffer[4])
-        {
-            // checksum error
-            return 1;
-        }
+      buf[i] = DHT11_Read_Byte();
     }
-    
-    return 0;
+    if ((buf[0] + buf[1] + buf[2] + buf[3]) == buf[4])
+    {
+      humidness = ((buf[0] << 8) + buf[1]) / 10.0f;
+      temperature = ((buf[2] << 8) + buf[3]) / 10.0f;
+      return 0;
+    }
+  }
+  return 1;
 }
 

@@ -7,8 +7,8 @@
 #define UI_MODE_CONNCTING 3
 #define UI_MODE_MENU 4
 #define UI_MODE_BOOT_FAIL 5
-
-
+#define UI_MODE_CONNCT_SERVER_ERR 6
+#define UI_MODE_MESSAGE 7
 
 
 #define UI_MODE_ASK_REBOOT 25

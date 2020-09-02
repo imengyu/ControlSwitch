@@ -4,7 +4,8 @@
 #define __UTILS_H
 
 #include "stm32f1xx_hal.h"
-
+#include "stdlib.h"
+#include "stdio.h"
 
 #define BITBAND(addr, bitnum) ((addr & 0xF0000000)+0x2000000+((addr &0xFFFFF)<<5)+(bitnum<<2)) 
 #define MEM_ADDR(addr)  *((volatile unsigned long  *)(addr)) 
@@ -48,6 +49,28 @@
 #define PGin(n)    BIT_ADDR(GPIOG_IDR_Addr,n)  
 
 unsigned char DecToBCD(unsigned char mData);
+//生成不重复数字
+uint16_t genNoDuplicateInteger(void);
+//取0a,x]的随机整数
+uint16_t genRandomInteger(uint16_t x);
+//取得(a,b]的随机整数
+uint16_t genRandomIntegerRange(uint16_t a, uint16_t b);
+
+#define USER_DEBUG
+
+#ifdef USER_DEBUG
+#define Debug_Printf(format, ...) printf( format "\r\n",##__VA_ARGS__)
+#define Debug_Info(tag, format, ...) printf("[" tag "] Info:" format "\r\n",##__VA_ARGS__)
+#define Debug_Debug(tag, format, ...) printf("[" tag "] Debug:" format "\r\n",##__VA_ARGS__)
+#define Debug_Error(tag, format, ...) printf("[" tag "] Error:" format "\r\n",##__VA_ARGS__)
+#define Debug_Warning(tag, format, ...) printf("[" tag "] Waining:" format "\r\n",##__VA_ARGS__)
+#else
+#define user_main_printf(tag, format, ...)
+#define Debug_Info(tag, format, ...)
+#define Debug_Debug(tag, format, ...)
+#define Debug_Error(tag, format, ...)
+#define Debug_Warning(tag, format, ...)
+#endif
 
 #endif
 
