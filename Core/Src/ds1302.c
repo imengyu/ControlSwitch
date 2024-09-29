@@ -28,12 +28,12 @@ void DS1302_Write_Byte(uint8_t temp)
   {
     if (temp & 0x01) //低位在前
     {
-      DS1302_DAT_OUT = 1;
+      DS1302_DAT(1);
       Delay_US(2);
     }
     else
     {
-      DS1302_DAT_OUT = 0;
+      DS1302_DAT(0);
       Delay_US(2);
     }
 
@@ -45,7 +45,7 @@ void DS1302_Write_Byte(uint8_t temp)
     temp = temp >> 1;
   }
 
-  DS1302_DAT_OUT = 1; //释放端口
+  DS1302_DAT(1); //释放端口
   Delay_US(2);
 }
 
@@ -79,7 +79,7 @@ uint8_t DS1302_Read_Byte(void)
     Delay_US(2);
     temp >>= 1;
 
-    if (DS1302_DAT_IN)
+    if (DS1302_DAT_READ())
       temp = temp | 0x80;
     else
       temp = temp & 0x7f;
@@ -110,9 +110,9 @@ uint8_t DS1302_Read(uint8_t addr)
   Delay_US(2);
   DS1302_CS_0;
   Delay_US(2);
-  DS1302_DAT_OUT = 0; //释放端口
+  DS1302_DAT(0); //释放端口
   Delay_US(2);
-  DS1302_DAT_OUT = 1; //释放端口
+  DS1302_DAT(1); //释放端口
   Delay_US(2);
 
   return (val / 16 * 10) + (val % 16); //十六进制转换成BCD码

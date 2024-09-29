@@ -5,8 +5,9 @@
 #include "utils.h"
 
 #define DS1302_PORT GPIOB
-#define DS1302_IN GPIO_PIN_3
-#define DS1302_CS GPIO_PIN_4
+
+#define DS1302_CS GPIO_PIN_3
+#define DS1302_IO GPIO_PIN_4
 #define DS1302_CLK GPIO_PIN_5
 
 #define DS1302_CS_1 HAL_GPIO_WritePin(DS1302_PORT, DS1302_CS, GPIO_PIN_SET)
@@ -17,6 +18,9 @@
 
 #define DS1302_DAT_Input() {DS1302_PORT->CRL &= 0XFFFFFF0F;DS1302_PORT->CRL |= (uint32_t)8<<4;} //上拉输入模式
 #define DS1302_DAT_Output() {DS1302_PORT->CRL &= 0XFFFFFF0F;DS1302_PORT->CRL |= (uint32_t)3<<4;} //输出，速度是50Mhz
+
+#define DS1302_DAT(x) HAL_GPIO_WritePin(DS1302_PORT, DS1302_IO, x)
+#define DS1302_DAT_READ() HAL_GPIO_ReadPin(DS1302_PORT, DS1302_IO)
 
 //DS1302地址定义
 #define ds1302_sec_add	0x80	//秒数据地址
@@ -41,7 +45,7 @@ typedef struct
   uint8_t weekday;
 }Timedata;
 
-void DS1302_Init(void);
+void DS1302_IOit(void);
 void DS1302_Write_Byte(uint8_t temp);
 void DS1302_Write(uint8_t addr,uint8_t data);
 uint8_t DS1302_Read_Byte(void);
